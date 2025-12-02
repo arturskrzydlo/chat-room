@@ -170,10 +170,6 @@ func (c *Client) handleCreateRoom(msg *messages.WsMessage) {
 		c.sendError("create_room_error", err.Error())
 		return
 	}
-
-	if err := c.coordinator.JoinRoom(p.RoomID, c.userID, c.userName, c.send); err != nil {
-		log.Printf("auto-join error: %v", err)
-	}
 }
 
 func (c *Client) handleJoinRoom(msg *messages.WsMessage) {
