@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/ws-schema",
+  "title": "WebSocket Message Schema",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/JoinRoomMessage" },
+    { "$ref": "#/$defs/LeaveRoomMessage" },
+    { "$ref": "#/$defs/ChatMessage" },
+    { "$ref": "#/$defs/CreateRoomMessage" },
+    { "$ref": "#/$defs/PingMessage" }
+  ],
+  "$defs": {
+    "JoinRoomPayload": {
+      "type": "object",
+      "required": ["room_id", "user_id"],
+      "properties": {
+        "room_id": { "type": "string" },
+        "user_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "LeaveRoomPayload": {
+      "type": "object",
+      "required": ["room_id", "user_id"],
+      "properties": {
+        "room_id": { "type": "string" },
+        "user_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "MessagePayload": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "CreateRoomPayload": {
+      "type": "object",
+      "required": ["room_id", "room_name"],
+      "properties": {
+        "room_id": { "type": "string" },
+        "room_name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ErrorPayload": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "JoinRoomMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "join"
+        },
+        "payload": { "$ref": "#/$defs/JoinRoomPayload" }
+      },
+      "additionalProperties": false
+    },
+    "LeaveRoomMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "leave"
+        },
+        "payload": { "$ref": "#/$defs/LeaveRoomPayload" }
+      },
+      "additionalProperties": false
+    },
+    "ChatMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "message"
+        },
+        "payload": { "$ref": "#/$defs/MessagePayload" }
+      },
+      "additionalProperties": false
+    },
+    "CreateRoomMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "create_room"
+        },
+        "payload": { "$ref": "#/$defs/CreateRoomPayload" }
+      },
+      "additionalProperties": false
+    },
+    "PingMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "ping"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "ServerEventNewMessage": {
+      "type": "object",
+      "required": ["type", "room_id", "room_name", "message", "message_time"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "new_message"
+        },
+        "room_id": { "type": "string" },
+        "room_name": { "type": "string" },
+        "message": { "$ref": "#/$defs/MessagePayload" },
+        "message_time": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ServerEventNewRoom": {
+      "type": "object",
+      "required": ["type", "room_id", "author_id", "room_name"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "new_room"
+        },
+        "room_id": { "type": "string" },
+        "author_id": { "type": "string" },
+        "room_name": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "ServerError": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "error"
+        },
+        "payload": { "$ref": "#/$defs/ErrorPayload" }
+      },
+      "additionalProperties": false
+    }
+  }
+}
