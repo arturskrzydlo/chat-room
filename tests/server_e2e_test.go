@@ -12,20 +12,20 @@ import (
 	"github.com/arturskrzydlo/chat-room/internal/messages"
 	"github.com/arturskrzydlo/chat-room/internal/server"
 	"github.com/gorilla/websocket"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func readJSON(t *testing.T, c *websocket.Conn, v interface{}) {
 	t.Helper()
-	if err := c.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		t.Fatalf("SetReadDeadline: %v", err)
-	}
+	err := c.SetReadDeadline(time.Now().Add(2 * time.Second))
+	require.NoError(t, err, "SetReadDeadline")
+
 	_, data, err := c.ReadMessage()
-	if err != nil {
-		t.Fatalf("ReadMessage: %v", err)
-	}
-	if err := json.Unmarshal(data, v); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
+	require.NoError(t, err, "ReadMessage")
+
+	err = json.Unmarshal(data, v)
+	require.NoError(t, err, "Unmarshal")
 }
 
 func mustRaw(v interface{}) json.RawMessage {
@@ -51,24 +51,18 @@ func TestChatEndToEnd(t *testing.T) {
 	defer ts.Close()
 
 	u, err := url.Parse(ts.URL)
-	if err != nil {
-		t.Fatalf("parse test server url: %v", err)
-	}
-	u.Scheme = "ws"
+	require.NoError(t, err, "parse test server url")
 
+	u.Scheme = "ws"
 	dialer := websocket.Dialer{}
 
 	// Two WS clients: user1 (creator) and user2 (joiner).
 	conn1, _, err := dialer.Dial(u.String(), nil)
-	if err != nil {
-		t.Fatalf("dial user1: %v", err)
-	}
+	require.NoError(t, err, "dial user1")
 	defer conn1.Close()
 
 	conn2, _, err := dialer.Dial(u.String(), nil)
-	if err != nil {
-		t.Fatalf("dial user2: %v", err)
-	}
+	require.NoError(t, err, "dial user2")
 	defer conn2.Close()
 
 	// 1) user1 creates room_1 (and establishes identity).
@@ -82,16 +76,13 @@ func TestChatEndToEnd(t *testing.T) {
 		Type:    messages.MessageActionTypeCreateRoom,
 		Payload: mustRaw(createPayload),
 	}
-	if err := conn1.WriteJSON(createMsg); err != nil {
-		t.Fatalf("user1 create room write: %v", err)
-	}
+	err = conn1.WriteJSON(createMsg)
+	require.NoError(t, err, "user1 create room write")
 
 	// user1 should receive new_room event.
 	var ev map[string]interface{}
 	readJSON(t, conn1, &ev)
-	if ev["type"] != string(messages.EventNewRoom) {
-		t.Fatalf("expected new_room event for user1, got: %#v", ev)
-	}
+	require.Equal(t, string(messages.EventNewRoom), ev["type"], "expected new_room event for user1")
 
 	// 2) user2 joins room_1.
 	joinPayload2 := messages.JoinRoomPayload{
@@ -103,26 +94,20 @@ func TestChatEndToEnd(t *testing.T) {
 		Type:    messages.MessageActionTypeJoin,
 		Payload: mustRaw(joinPayload2),
 	}
-	if err := conn2.WriteJSON(joinMsg2); err != nil {
-		t.Fatalf("user2 join write: %v", err)
-	}
+	err = conn2.WriteJSON(joinMsg2)
+	require.NoError(t, err, "user2 join write")
 
 	// user2 expects join_success.
 	var joinResp map[string]interface{}
 	readJSON(t, conn2, &joinResp)
-	if joinResp["type"] != "join_success" {
-		t.Fatalf("expected join_success for user2, got: %#v", joinResp)
-	}
+	require.Equal(t, "join_success", joinResp["type"], "expected join_success for user2")
 
 	// user1 receives system "User Two joined the room".
 	var sysJoin messages.Message
 	readJSON(t, conn1, &sysJoin)
-	if sysJoin.Type != messages.EventNewMessage || sysJoin.UserID != "system" {
-		t.Fatalf("expected system join message for user1, got: %#v", sysJoin)
-	}
-	if sysJoin.Message.Message != "User Two joined the room" {
-		t.Fatalf("unexpected join message content: %#v", sysJoin)
-	}
+	require.Equal(t, messages.EventNewMessage, sysJoin.Type, "expected system join event type")
+	require.Equal(t, "system", sysJoin.UserID, "expected system join user id")
+	require.Equal(t, "User Two joined the room", sysJoin.Message.Message, "unexpected join message content")
 
 	// 3) user1 sends a chat message.
 	msgPayload1 := messages.MessagePayload{Message: "hello from user1"}
@@ -130,33 +115,29 @@ func TestChatEndToEnd(t *testing.T) {
 		Type:    messages.MessageActionTypeMessage,
 		Payload: mustRaw(msgPayload1),
 	}
-	if err := conn1.WriteJSON(sendMsg1); err != nil {
-		t.Fatalf("user1 send message write: %v", err)
-	}
+	err = conn1.WriteJSON(sendMsg1)
+	require.NoError(t, err, "user1 send message write")
 
 	// On conn1, next message: user1's own chat.
 	var msgEv1 messages.Message
 	readJSON(t, conn1, &msgEv1)
-	if msgEv1.Type != messages.EventNewMessage || msgEv1.UserID != "user1" ||
-		msgEv1.Message.Message != "hello from user1" {
-		t.Fatalf("user1 got wrong first chat message: %#v", msgEv1)
-	}
+	require.Equal(t, messages.EventNewMessage, msgEv1.Type, "user1 first chat type")
+	require.Equal(t, "user1", msgEv1.UserID, "user1 first chat user id")
+	require.Equal(t, "hello from user1", msgEv1.Message.Message, "user1 first chat content")
 
 	// On conn2, next message is still the system join broadcast ("User Two joined the room").
 	var sysJoinOn2 messages.Message
 	readJSON(t, conn2, &sysJoinOn2)
-	if sysJoinOn2.Type != messages.EventNewMessage || sysJoinOn2.UserID != "system" ||
-		sysJoinOn2.Message.Message != "User Two joined the room" {
-		t.Fatalf("expected system join message for user2, got: %#v", sysJoinOn2)
-	}
+	require.Equal(t, messages.EventNewMessage, sysJoinOn2.Type, "user2 system join type")
+	require.Equal(t, "system", sysJoinOn2.UserID, "user2 system join user id")
+	require.Equal(t, "User Two joined the room", sysJoinOn2.Message.Message, "user2 system join content")
 
 	// The following message on conn2 is the chat from user1.
 	var msgEv2 messages.Message
 	readJSON(t, conn2, &msgEv2)
-	if msgEv2.Type != messages.EventNewMessage || msgEv2.UserID != "user1" ||
-		msgEv2.Message.Message != "hello from user1" {
-		t.Fatalf("user2 got wrong first chat message: %#v", msgEv2)
-	}
+	require.Equal(t, messages.EventNewMessage, msgEv2.Type, "user2 first chat type")
+	require.Equal(t, "user1", msgEv2.UserID, "user2 first chat user id")
+	require.Equal(t, "hello from user1", msgEv2.Message.Message, "user2 first chat content")
 
 	// 4) user2 replies.
 	msgPayload2 := messages.MessagePayload{Message: "hi from user2"}
@@ -164,23 +145,20 @@ func TestChatEndToEnd(t *testing.T) {
 		Type:    messages.MessageActionTypeMessage,
 		Payload: mustRaw(msgPayload2),
 	}
-	if err := conn2.WriteJSON(sendMsg2); err != nil {
-		t.Fatalf("user2 send message write: %v", err)
-	}
+	err = conn2.WriteJSON(sendMsg2)
+	require.NoError(t, err, "user2 send message write")
 
 	// Next message on conn2: its own chat.
 	readJSON(t, conn2, &msgEv2)
-	if msgEv2.Type != messages.EventNewMessage || msgEv2.UserID != "user2" ||
-		msgEv2.Message.Message != "hi from user2" {
-		t.Fatalf("user2 got wrong reply chat message: %#v", msgEv2)
-	}
+	require.Equal(t, messages.EventNewMessage, msgEv2.Type, "user2 reply type")
+	require.Equal(t, "user2", msgEv2.UserID, "user2 reply user id")
+	require.Equal(t, "hi from user2", msgEv2.Message.Message, "user2 reply content")
 
 	// Next message on conn1: reply from user2.
 	readJSON(t, conn1, &msgEv1)
-	if msgEv1.Type != messages.EventNewMessage || msgEv1.UserID != "user2" ||
-		msgEv1.Message.Message != "hi from user2" {
-		t.Fatalf("user1 got wrong reply chat message: %#v", msgEv1)
-	}
+	require.Equal(t, messages.EventNewMessage, msgEv1.Type, "user1 sees reply type")
+	require.Equal(t, "user2", msgEv1.UserID, "user1 sees reply user id")
+	require.Equal(t, "hi from user2", msgEv1.Message.Message, "user1 sees reply content")
 
 	// 5) both users leave room_1.
 	leavePayload := messages.LeaveRoomPayload{RoomID: "room_1"}
@@ -190,29 +168,23 @@ func TestChatEndToEnd(t *testing.T) {
 	}
 
 	// user2 leaves first.
-	if err := conn2.WriteJSON(leaveMsg); err != nil {
-		t.Fatalf("user2 leave write: %v", err)
-	}
+	err = conn2.WriteJSON(leaveMsg)
+	require.NoError(t, err, "user2 leave write")
 
 	// user1 should receive system "User Two left the room".
 	var sysLeave messages.Message
 	readJSON(t, conn1, &sysLeave)
-	if sysLeave.Type != messages.EventNewMessage || sysLeave.UserID != "system" {
-		t.Fatalf("expected system leave message for user1, got: %#v", sysLeave)
-	}
-	if sysLeave.Message.Message != "User Two left the room" {
-		t.Fatalf("unexpected leave message content: %#v", sysLeave)
-	}
+	require.Equal(t, messages.EventNewMessage, sysLeave.Type, "user1 system leave type")
+	require.Equal(t, "system", sysLeave.UserID, "user1 system leave user id")
+	require.Equal(t, "User Two left the room", sysLeave.Message.Message, "user1 system leave content")
 
 	// now user1 leaves
-	if err := conn1.WriteJSON(leaveMsg); err != nil {
-		t.Fatalf("user1 leave write: %v", err)
-	}
+	err = conn1.WriteJSON(leaveMsg)
+	require.NoError(t, err, "user1 leave write")
 
 	// Graceful shutdown.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := coord.Shutdown(ctx); err != nil {
-		t.Fatalf("coordinator shutdown: %v", err)
-	}
+	err = coord.Shutdown(ctx)
+	assert.NoError(t, err, "coordinator shutdown")
 }
