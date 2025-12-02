@@ -30,13 +30,13 @@ type WsMessage struct {
 // Payloads per message type
 
 type JoinRoomPayload struct {
-	RoomID string `json:"room_id"`
-	UserID string `json:"user_id"`
+	RoomID   string `json:"room_id"`
+	UserID   string `json:"user_id"`
+	UserName string `json:"user_name"`
 }
 
 type LeaveRoomPayload struct {
 	RoomID string `json:"room_id"`
-	UserID string `json:"user_id"`
 }
 
 type MessagePayload struct {
@@ -46,6 +46,8 @@ type MessagePayload struct {
 type CreateRoomPayload struct {
 	RoomID   string `json:"room_id"`
 	RoomName string `json:"room_name"`
+	UserID   string `json:"user_id"`
+	UserName string `json:"user_name"`
 }
 
 type ErrorPayload struct {

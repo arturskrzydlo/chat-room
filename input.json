@@ -1,0 +1,36 @@
+{
+   "create" : {
+     "type" : "create_room",
+     "payload" : {
+       "room_id" : "room_1",
+       "room_name" : "hello room",
+       "author_id" : "Artur"
+     }
+   },
+
+  "join" : {
+    "type" : "join",
+    "payload" : {
+      "room_id" : "room_1",
+      "user_id" : "Michal",
+      "user_name": "Michal"
+    }
+  },
+
+  "send" : {
+    "type" : "message",
+    "payload" : {
+      "message" : "hello everybody"
+    }
+  },
+
+  "leave" : {
+    "type" : "leave",
+    "payload" : {
+      "room_id" : "room_1",
+      "user_id" : "Michal"
+    }
+  }
+}
+
+

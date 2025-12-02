@@ -16,7 +16,7 @@ var (
 
 func loadSchema() error {
 	onceSchemaLoad.Do(func() {
-		schemaBytes, err := os.ReadFile("internal/websocket_schema/message_schema.json")
+		schemaBytes, err := os.ReadFile("internal/server/message_schema.json")
 		if err != nil {
 			schemaLoadError = fmt.Errorf("failed to load WebSocket JSON schema: %w", err)
 			return
