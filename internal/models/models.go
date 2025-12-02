@@ -151,9 +151,6 @@ func (r *Room) cleanup() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	for _, send := range r.clients {
-		close(send)
-	}
 	r.clients = make(map[string]chan<- interface{})
 	r.users = make(map[string]*User)
 }
