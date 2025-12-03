@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/arturskrzydlo/chat-room/internal/messages"
 	"github.com/arturskrzydlo/chat-room/internal/models"
@@ -50,12 +49,7 @@ func (c *Coordinator) CreateRoom(
 
 	log.Printf("CreateRoom: roomID=%s author=%s", roomID, authorID)
 
-	send <- messages.RoomCreate{
-		Type:     messages.EventNewRoom,
-		RoomID:   roomID,
-		AuthorID: authorID,
-		RoomName: roomName,
-	}
+	send <- messages.NewRoom(roomID, authorID, roomName)
 
 	log.Printf("CreateRoom: sent new_room to author")
 
@@ -94,17 +88,8 @@ func (c *Coordinator) JoinRoom(
 		Send:   send,
 	}
 
-	// enqueue join
 	room.EnqueueJoin(roomClient)
-
-	// broadcast join system message
-	joinMessage := messages.Message{
-		Type:        messages.EventNewMessage,
-		RoomID:      roomID,
-		UserID:      "system",
-		Message:     messages.MessagePayload{Message: fmt.Sprintf("%s joined the room", userName)},
-		MessageTime: time.Now().UTC().Format(time.RFC3339),
-	}
+	joinMessage := messages.NewUserJoinedEvent(roomID, userID, userName)
 	room.EnqueueBroadcast(joinMessage)
 
 	return nil
@@ -125,20 +110,10 @@ func (c *Coordinator) LeaveRoom(
 		return fmt.Errorf("user %s not in room %s", userID, roomID)
 	}
 
-	// enqueue leave
 	room.EnqueueLeave(userID)
-
-	// broadcast leave system message
-	leaveMessage := messages.Message{
-		Type:        messages.EventNewMessage,
-		RoomID:      roomID,
-		UserID:      "system",
-		Message:     messages.MessagePayload{Message: fmt.Sprintf("%s left the room", user.Name)},
-		MessageTime: time.Now().UTC().Format(time.RFC3339),
-	}
+	leaveMessage := messages.NewUserLeftEvent(roomID, userID, user.Name)
 	room.EnqueueBroadcast(leaveMessage)
 
-	// possibly delete room
 	c.deleteRoomIfEmpty(roomID)
 
 	return nil
@@ -164,19 +139,14 @@ func (c *Coordinator) SendMessage(
 	}
 
 	users := room.GetUsers()
-	if _, exists := users[userID]; !exists {
+	user, exists := users[userID]
+	if !exists {
 		return fmt.Errorf("user %s not in room %s", userID, roomID)
 	}
 
-	msg := messages.Message{
-		Type:        messages.EventNewMessage,
-		RoomID:      roomID,
-		UserID:      userID,
-		Message:     messages.MessagePayload{Message: content},
-		MessageTime: time.Now().UTC().Format(time.RFC3339),
-	}
-
+	msg := messages.NewRoomMessageEvent(roomID, userID, user.Name, content)
 	room.EnqueueBroadcast(msg)
+
 	return nil
 }
 

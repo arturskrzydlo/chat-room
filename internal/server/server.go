@@ -138,7 +138,7 @@ func (c *Client) dispatchMessage(msg *messages.WsMessage) {
 		c.handleChatMessage(msg)
 
 	case messages.MessageActionTypePing:
-		c.send <- map[string]string{"type": "pong"}
+		c.send <- messages.Pong{Type: "pong"}
 
 	default:
 		c.sendError("invalid_message_type", fmt.Sprintf("unknown message type: %s", msg.Type))
@@ -202,11 +202,7 @@ func (c *Client) handleJoinRoom(msg *messages.WsMessage) {
 
 	log.Printf("User %s joined room: %s", c.userName, p.RoomID)
 
-	c.send <- map[string]interface{}{
-		"type":    "join_success",
-		"room_id": p.RoomID,
-		"user_id": c.userID,
-	}
+	c.send <- messages.NewJoinSuccess(p.RoomID, c.userID)
 }
 
 func (c *Client) handleLeaveRoom(msg *messages.WsMessage) {

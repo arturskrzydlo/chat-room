@@ -27,8 +27,7 @@
   "leave" : {
     "type" : "leave",
     "payload" : {
-      "room_id" : "room_1",
-      "user_id" : "Michal"
+      "room_id" : "room_1"
     }
   }
 }

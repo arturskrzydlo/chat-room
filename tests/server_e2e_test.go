@@ -65,11 +65,14 @@ func TestChatEndToEnd(t *testing.T) {
 	require.NoError(t, err, "dial user2")
 	defer conn2.Close()
 
+	userID1 := "user1"
+	userID2 := "user2"
+
 	// 1) user1 creates room_1 (and establishes identity).
 	createPayload := messages.CreateRoomPayload{
 		RoomID:   "room_1",
 		RoomName: "hello room",
-		UserID:   "user1",
+		UserID:   userID1,
 		UserName: "User One",
 	}
 	createMsg := messages.WsMessage{
@@ -87,7 +90,7 @@ func TestChatEndToEnd(t *testing.T) {
 	// 2) user2 joins room_1.
 	joinPayload2 := messages.JoinRoomPayload{
 		RoomID:   "room_1",
-		UserID:   "user2",
+		UserID:   userID2,
 		UserName: "User Two",
 	}
 	joinMsg2 := messages.WsMessage{
@@ -103,11 +106,10 @@ func TestChatEndToEnd(t *testing.T) {
 	require.Equal(t, "join_success", joinResp["type"], "expected join_success for user2")
 
 	// user1 receives system "User Two joined the room".
-	var sysJoin messages.Message
+	var sysJoin messages.UserJoinedEvent
 	readJSON(t, conn1, &sysJoin)
-	require.Equal(t, messages.EventNewMessage, sysJoin.Type, "expected system join event type")
-	require.Equal(t, "system", sysJoin.UserID, "expected system join user id")
-	require.Equal(t, "User Two joined the room", sysJoin.Message.Message, "unexpected join message content")
+	require.Equal(t, messages.EventUserJoinedRoom, sysJoin.Type, "expected system join event type")
+	require.Equal(t, userID2, sysJoin.UserID, "expected system join user id")
 
 	// 3) user1 sends a chat message.
 	msgPayload1 := messages.MessagePayload{Message: "hello from user1"}
@@ -119,24 +121,23 @@ func TestChatEndToEnd(t *testing.T) {
 	require.NoError(t, err, "user1 send message write")
 
 	// On conn1, next message: user1's own chat.
-	var msgEv1 messages.Message
+	var msgEv1 messages.RoomMessageEvent
 	readJSON(t, conn1, &msgEv1)
 	require.Equal(t, messages.EventNewMessage, msgEv1.Type, "user1 first chat type")
-	require.Equal(t, "user1", msgEv1.UserID, "user1 first chat user id")
+	require.Equal(t, userID1, msgEv1.UserID, "user1 first chat user id")
 	require.Equal(t, "hello from user1", msgEv1.Message.Message, "user1 first chat content")
 
 	// On conn2, next message is still the system join broadcast ("User Two joined the room").
-	var sysJoinOn2 messages.Message
+	var sysJoinOn2 messages.UserJoinedEvent
 	readJSON(t, conn2, &sysJoinOn2)
-	require.Equal(t, messages.EventNewMessage, sysJoinOn2.Type, "user2 system join type")
-	require.Equal(t, "system", sysJoinOn2.UserID, "user2 system join user id")
-	require.Equal(t, "User Two joined the room", sysJoinOn2.Message.Message, "user2 system join content")
+	require.Equal(t, messages.EventUserJoinedRoom, sysJoinOn2.Type, "user2 system join type")
+	require.Equal(t, userID2, sysJoinOn2.UserID, "user2 system join user id")
 
 	// The following message on conn2 is the chat from user1.
-	var msgEv2 messages.Message
+	var msgEv2 messages.RoomMessageEvent
 	readJSON(t, conn2, &msgEv2)
 	require.Equal(t, messages.EventNewMessage, msgEv2.Type, "user2 first chat type")
-	require.Equal(t, "user1", msgEv2.UserID, "user2 first chat user id")
+	require.Equal(t, userID1, msgEv2.UserID, "user2 first chat user id")
 	require.Equal(t, "hello from user1", msgEv2.Message.Message, "user2 first chat content")
 
 	// 4) user2 replies.
@@ -151,13 +152,13 @@ func TestChatEndToEnd(t *testing.T) {
 	// Next message on conn2: its own chat.
 	readJSON(t, conn2, &msgEv2)
 	require.Equal(t, messages.EventNewMessage, msgEv2.Type, "user2 reply type")
-	require.Equal(t, "user2", msgEv2.UserID, "user2 reply user id")
+	require.Equal(t, userID2, msgEv2.UserID, "user2 reply user id")
 	require.Equal(t, "hi from user2", msgEv2.Message.Message, "user2 reply content")
 
 	// Next message on conn1: reply from user2.
 	readJSON(t, conn1, &msgEv1)
 	require.Equal(t, messages.EventNewMessage, msgEv1.Type, "user1 sees reply type")
-	require.Equal(t, "user2", msgEv1.UserID, "user1 sees reply user id")
+	require.Equal(t, userID2, msgEv1.UserID, "user1 sees reply user id")
 	require.Equal(t, "hi from user2", msgEv1.Message.Message, "user1 sees reply content")
 
 	// 5) both users leave room_1.
@@ -172,11 +173,10 @@ func TestChatEndToEnd(t *testing.T) {
 	require.NoError(t, err, "user2 leave write")
 
 	// user1 should receive system "User Two left the room".
-	var sysLeave messages.Message
+	var sysLeave messages.RoomMessageEvent
 	readJSON(t, conn1, &sysLeave)
-	require.Equal(t, messages.EventNewMessage, sysLeave.Type, "user1 system leave type")
-	require.Equal(t, "system", sysLeave.UserID, "user1 system leave user id")
-	require.Equal(t, "User Two left the room", sysLeave.Message.Message, "user1 system leave content")
+	require.Equal(t, messages.EventUserLeftRoom, sysLeave.Type, "user1 system leave type")
+	require.Equal(t, userID2, sysLeave.UserID, "user1 system leave user id")
 
 	// now user1 leaves
 	err = conn1.WriteJSON(leaveMsg)

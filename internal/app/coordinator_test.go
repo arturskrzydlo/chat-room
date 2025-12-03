@@ -30,16 +30,16 @@ func TestCoordinatorCreateRoom(t *testing.T) {
 	_, ok := users["author1"]
 	assert.True(t, ok, "expected author1 to be in room users after CreateRoom")
 
-	// RoomCreate event sent on send channel.
+	// RoomCreateEvent event sent on send channel.
 	select {
 	case ev := <-send:
-		rc, ok := ev.(messages.RoomCreate)
-		require.True(t, ok, "expected RoomCreate event")
+		rc, ok := ev.(messages.RoomCreateEvent)
+		require.True(t, ok, "expected RoomCreateEvent event")
 		assert.Equal(t, "room_1", rc.RoomID)
 		assert.Equal(t, "author1", rc.AuthorID)
 		assert.Equal(t, "Room One", rc.RoomName)
 	default:
-		require.Fail(t, "expected RoomCreate event on send channel")
+		require.Fail(t, "expected RoomCreateEvent event on send channel")
 	}
 
 	// Creating the same room again should fail.
@@ -74,7 +74,7 @@ func TestCoordinatorCreateRoomValidation(t *testing.T) {
 		})
 	}
 
-	// duplicate id case
+	// duplicate id case (fresh coordinator)
 	c = NewCoordinator()
 	send = make(chan interface{}, 1)
 	err := c.CreateRoom("dup", "author", "Room", send)
@@ -103,25 +103,26 @@ func TestCoordinatorJoinRoom(t *testing.T) {
 	_, ok := users["user2"]
 	assert.True(t, ok, "expected user2 to be in room after JoinRoom")
 
-	// System join message broadcast to room participants.
-	gotSystem := false
-	checkForSystem := func(ch <-chan interface{}) {
+	// UserJoinedEvent broadcast to room participants.
+	gotJoinEvent := false
+	checkForJoin := func(ch <-chan interface{}) {
 		select {
 		case ev := <-ch:
-			msg, ok := ev.(messages.Message)
+			uj, ok := ev.(messages.UserJoinedEvent)
 			if ok &&
-				msg.Type == messages.EventNewMessage &&
-				msg.UserID == "system" &&
-				msg.Message.Message == "User Two joined the room" {
-				gotSystem = true
+				uj.Type == messages.EventUserJoinedRoom &&
+				uj.RoomID == "room_1" &&
+				uj.UserID == "user2" &&
+				uj.UserName == "User Two" {
+				gotJoinEvent = true
 			}
 		default:
 		}
 	}
 
-	checkForSystem(sendAuthor)
-	checkForSystem(sendUser2)
-	assert.True(t, gotSystem, "expected system join message broadcast to at least one client")
+	checkForJoin(sendAuthor)
+	checkForJoin(sendUser2)
+	assert.True(t, gotJoinEvent, "expected UserJoinedEvent broadcast to at least one client")
 
 	// Joining same user again should error.
 	err = c.JoinRoom("room_1", "user2", "User Two", sendUser2)
@@ -142,8 +143,8 @@ func TestCoordinatorSendMessage(t *testing.T) {
 	// Happy path: user2 sends message.
 	require.NoError(t, c.SendMessage("room_1", "user2", "hello"))
 
-	expectChatFrom(t, sendAuthor, "user2", "hello")
-	expectChatFrom(t, sendUser2, "user2", "hello")
+	expectChatFrom(t, sendAuthor, "user2", "User Two", "hello")
+	expectChatFrom(t, sendUser2, "user2", "User Two", "hello")
 
 	// Validation cases.
 	require.Error(t, c.SendMessage("room_1", "user2", ""))                              // empty
@@ -202,8 +203,8 @@ func TestCoordinatorLeaveRoom(t *testing.T) {
 
 	require.NoError(t, c.LeaveRoom("room_1", "user2"))
 
-	// system leave message to author
-	expectSystemLeave(t, sendAuthor, "User Two")
+	// UserLeftEvent to author
+	expectUserLeftEvent(t, sendAuthor, "room_1", "user2", "User Two")
 
 	// author can still leave without error
 	require.NoError(t, c.LeaveRoom("room_1", "author1"))
@@ -237,55 +238,53 @@ func waitForUserInRoom(t *testing.T, c *Coordinator, roomID, userID string) {
 	require.Failf(t, "user not in room", "user %s was not in room %s in time", userID, roomID)
 }
 
-func expectChatFrom(t *testing.T, ch <-chan interface{}, wantUserID, wantMsg string) {
+func expectChatFrom(t *testing.T, ch <-chan interface{}, wantUserID, wantUserName, wantMsg string) {
 	t.Helper()
 	deadline := time.Now().Add(200 * time.Millisecond)
-
 	for time.Now().Before(deadline) {
 		select {
 		case ev := <-ch:
-			// Only care about messages.Message; skip others (e.g. RoomCreate).
-			msg, ok := ev.(messages.Message)
+			// Only care about RoomMessageEvent; skip others (e.g. RoomCreateEvent, UserJoinedEvent, UserLeftEvent).
+			msg, ok := ev.(messages.RoomMessageEvent)
 			if !ok {
 				continue
 			}
 			if msg.Type != messages.EventNewMessage {
 				continue
 			}
-			if msg.UserID == wantUserID && msg.Message.Message == wantMsg {
+			if msg.UserID == wantUserID && msg.UserName == wantUserName && msg.Message.Message == wantMsg {
 				return
 			}
-			// keep looping until we see the expected one
 		default:
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-
 	require.Failf(t, "did not see expected chat message",
-		"expected message from %s with content %q", wantUserID, wantMsg)
+		"expected message from %s (%s) with content %q", wantUserID, wantUserName, wantMsg)
 }
 
-func expectSystemLeave(t *testing.T, ch <-chan interface{}, userName string) {
+func expectUserLeftEvent(t *testing.T, ch <-chan interface{}, roomID, userID, userName string) {
 	t.Helper()
 	deadline := time.Now().Add(200 * time.Millisecond)
-	want := userName + " left the room"
 
 	for time.Now().Before(deadline) {
 		select {
 		case ev := <-ch:
-			msg, ok := ev.(messages.Message)
+			ul, ok := ev.(messages.UserLeftEvent)
 			if !ok {
 				continue
 			}
-			if msg.Type == messages.EventNewMessage &&
-				msg.UserID == "system" &&
-				msg.Message.Message == want {
+			if ul.Type == messages.EventUserLeftRoom &&
+				ul.RoomID == roomID &&
+				ul.UserID == userID &&
+				ul.UserName == userName {
 				return
 			}
 		default:
 			time.Sleep(5 * time.Millisecond)
 		}
 	}
-	assert.Failf(t, "expected system leave message to be broadcast",
-		"did not see system leave message %q", want)
+
+	assert.Failf(t, "expected UserLeftEvent to be broadcast",
+		"did not see UserLeftEvent for room=%q userID=%q userName=%q", roomID, userID, userName)
 }

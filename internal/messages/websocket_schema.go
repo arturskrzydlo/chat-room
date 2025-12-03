@@ -2,32 +2,23 @@ package messages
 
 import (
 	"encoding/json"
+	"time"
 )
 
-type MessageActionType string
+type InputMessageActionType string
 
 const (
-	MessageActionTypeJoin       MessageActionType = "join"
-	MessageActionTypeLeave      MessageActionType = "leave"
-	MessageActionTypeMessage    MessageActionType = "message"
-	MessageActionTypeCreateRoom MessageActionType = "create_room"
-	MessageActionTypePing       MessageActionType = "ping"
+	MessageActionTypeJoin       InputMessageActionType = "join"
+	MessageActionTypeLeave      InputMessageActionType = "leave"
+	MessageActionTypeMessage    InputMessageActionType = "message"
+	MessageActionTypeCreateRoom InputMessageActionType = "create_room"
+	MessageActionTypePing       InputMessageActionType = "ping"
 )
 
-type EventType string
-
-const (
-	EventNewMessage EventType = "new_message"
-	EventNewRoom    EventType = "new_room"
-)
-
-// WsMessage is the envelope for all WS messages
 type WsMessage struct {
-	Type    MessageActionType `json:"type"`
-	Payload json.RawMessage   `json:"payload"`
+	Type    InputMessageActionType `json:"type"`
+	Payload json.RawMessage        `json:"payload"`
 }
-
-// Payloads per message type
 
 type JoinRoomPayload struct {
 	RoomID   string `json:"room_id"`
@@ -50,41 +41,108 @@ type CreateRoomPayload struct {
 	UserName string `json:"user_name"`
 }
 
+type EventType string
+
+const (
+	EventUserJoinedRoom EventType = "user_joined"
+	EventUserLeftRoom   EventType = "user_left"
+	EventNewMessage     EventType = "new_message"
+	EventNewRoom        EventType = "new_room"
+)
+
+// WsMessage is the envelope for all WS messages
+
 type ErrorPayload struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
-type Message struct {
+type JoinSuccess struct {
+	Type   string `json:"type"` // "join_success"
+	RoomID string `json:"room_id"`
+	UserID string `json:"user_id"`
+}
+
+type Pong struct {
+	Type string `json:"type"` // "pong"
+}
+
+type RoomMessageEvent struct {
 	Type        EventType      `json:"type"`
 	RoomID      string         `json:"room_id"`
-	UserID      string         `json:"room_name"`
+	UserID      string         `json:"user_id"`
+	UserName    string         `json:"user_name"`
 	Message     MessagePayload `json:"message"`
 	MessageTime string         `json:"message_time"` // ISO8601 string
 }
 
-type RoomCreate struct {
+type RoomCreateEvent struct {
 	Type     EventType `json:"type"`
 	RoomID   string    `json:"room_id"`
 	AuthorID string    `json:"author_id"`
 	RoomName string    `json:"room_name"`
 }
 
-func NewMessage(RoomID string, userID string, message string, timestamp string) Message {
-	return Message{
+type UserJoinedEvent struct {
+	Type        EventType `json:"type"`
+	RoomID      string    `json:"room_id"`
+	UserID      string    `json:"user_id"`
+	UserName    string    `json:"user_name"`
+	MessageTime string    `json:"message_time"`
+}
+
+type UserLeftEvent struct {
+	Type        EventType `json:"type"`
+	RoomID      string    `json:"room_id"`
+	UserID      string    `json:"user_id"`
+	UserName    string    `json:"user_name"`
+	MessageTime string    `json:"message_time"`
+}
+
+func NewRoomMessageEvent(roomID string, userID string, userName string, message string) RoomMessageEvent {
+	return RoomMessageEvent{
 		Type:        EventNewMessage,
-		RoomID:      RoomID,
+		RoomID:      roomID,
 		UserID:      userID,
+		UserName:    userName,
 		Message:     MessagePayload{Message: message},
-		MessageTime: timestamp,
+		MessageTime: time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
-func NewRoom(RoomID string, AuthorID string, name string) RoomCreate {
-	return RoomCreate{
+func NewUserJoinedEvent(roomID string, userID string, userName string) UserJoinedEvent {
+	return UserJoinedEvent{
+		Type:        EventUserJoinedRoom,
+		RoomID:      roomID,
+		UserID:      userID,
+		UserName:    userName,
+		MessageTime: time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func NewUserLeftEvent(roomID string, userID string, userName string) UserLeftEvent {
+	return UserLeftEvent{
+		Type:        EventUserLeftRoom,
+		RoomID:      roomID,
+		UserID:      userID,
+		UserName:    userName,
+		MessageTime: time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func NewRoom(RoomID string, AuthorID string, name string) RoomCreateEvent {
+	return RoomCreateEvent{
 		Type:     EventNewRoom,
 		RoomID:   RoomID,
 		RoomName: name,
 		AuthorID: AuthorID,
+	}
+}
+
+func NewJoinSuccess(roomID string, userID string) JoinSuccess {
+	return JoinSuccess{
+		Type:   "join_success",
+		RoomID: roomID,
+		UserID: userID,
 	}
 }

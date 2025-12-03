@@ -19,7 +19,6 @@ const (
 	roomEventClose
 )
 
-// roomEvent is a single envelope for all room operations
 type roomEvent struct {
 	kind   roomEventType
 	client *RoomClient
@@ -90,8 +89,6 @@ func (r *Room) Run() {
 	}
 }
 
-// API used by Coordinator:
-
 func (r *Room) EnqueueJoin(c *RoomClient) {
 	r.events <- roomEvent{kind: roomEventJoin, client: c}
 }
@@ -108,8 +105,6 @@ func (r *Room) EnqueueClose() {
 	r.events <- roomEvent{kind: roomEventClose}
 	close(r.events)
 }
-
-// Internal handlers:
 
 func (r *Room) handleJoin(client *RoomClient) {
 	r.mu.Lock()
