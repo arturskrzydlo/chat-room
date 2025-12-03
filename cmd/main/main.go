@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/arturskrzydlo/chat-room/internal/app"
+	"github.com/arturskrzydlo/chat-room/internal/coordinator"
 	"github.com/arturskrzydlo/chat-room/internal/server"
 )
 
 func main() {
 	// Create coordinator
-	coordinator := app.NewCoordinator()
+	coordinator := coordinator.NewCoordinator()
 
 	// Create WebSocket server
 	wsServer := server.NewWsServer(coordinator)

@@ -31,6 +31,7 @@ type LeaveRoomPayload struct {
 }
 
 type MessagePayload struct {
+	RoomID  string `json:"room_id"`
 	Message string `json:"message"`
 }
 
@@ -101,11 +102,13 @@ type UserLeftEvent struct {
 
 func NewRoomMessageEvent(roomID string, userID string, userName string, message string) RoomMessageEvent {
 	return RoomMessageEvent{
-		Type:        EventNewMessage,
-		RoomID:      roomID,
-		UserID:      userID,
-		UserName:    userName,
-		Message:     MessagePayload{Message: message},
+		Type:     EventNewMessage,
+		RoomID:   roomID,
+		UserID:   userID,
+		UserName: userName,
+		Message: MessagePayload{
+			RoomID:  roomID,
+			Message: message},
 		MessageTime: time.Now().UTC().Format(time.RFC3339),
 	}
 }

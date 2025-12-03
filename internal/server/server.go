@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/arturskrzydlo/chat-room/internal/app"
+	"github.com/arturskrzydlo/chat-room/internal/coordinator"
 	"github.com/arturskrzydlo/chat-room/internal/messages"
 	"github.com/gorilla/websocket"
 )
@@ -21,22 +21,22 @@ const (
 )
 
 type WsServer struct {
-	coordinator *app.Coordinator
+	coordinator *coordinator.Coordinator
 	upgrader    websocket.Upgrader
 }
 
 type Client struct {
-	roomID      string
+	rooms       map[string]struct{}
 	userID      string
 	userName    string
 	conn        *websocket.Conn
 	send        chan interface{}
-	coordinator *app.Coordinator
+	coordinator *coordinator.Coordinator
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
 
-func NewWsServer(coordinator *app.Coordinator) *WsServer {
+func NewWsServer(coordinator *coordinator.Coordinator) *WsServer {
 	return &WsServer{
 		coordinator: coordinator,
 		upgrader: websocket.Upgrader{
@@ -56,6 +56,7 @@ func (s *WsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	client := &Client{
+		rooms:       make(map[string]struct{}),
 		conn:        conn,
 		send:        make(chan interface{}, 32), // buffered for concurrency
 		coordinator: s.coordinator,
@@ -164,7 +165,7 @@ func (c *Client) handleCreateRoom(msg *messages.WsMessage) {
 		return
 	}
 
-	c.roomID = p.RoomID
+	c.rooms[p.RoomID] = struct{}{}
 
 	if err := c.coordinator.CreateRoom(p.RoomID, c.userID, p.RoomName, c.send); err != nil {
 		c.sendError("create_room_error", err.Error())
@@ -198,7 +199,7 @@ func (c *Client) handleJoinRoom(msg *messages.WsMessage) {
 		return
 	}
 
-	c.roomID = p.RoomID
+	c.rooms[p.RoomID] = struct{}{}
 
 	log.Printf("User %s joined room: %s", c.userName, p.RoomID)
 
@@ -212,7 +213,7 @@ func (c *Client) handleLeaveRoom(msg *messages.WsMessage) {
 		return
 	}
 
-	if p.RoomID != c.roomID {
+	if _, ok := c.rooms[p.RoomID]; !ok {
 		c.sendError("leave_room_error", "user not in this room")
 		return
 	}
@@ -224,25 +225,27 @@ func (c *Client) handleLeaveRoom(msg *messages.WsMessage) {
 
 	log.Printf("User %s left room: %s", c.userID, p.RoomID)
 
-	c.roomID = ""
-	c.userID = ""
-	c.userName = ""
-
+	delete(c.rooms, p.RoomID)
 }
 
 func (c *Client) handleChatMessage(msg *messages.WsMessage) {
-	if c.roomID == "" {
-		c.sendError("message_error", "not in a room")
-		return
-	}
-
 	var p messages.MessagePayload
 	if err := marshalPayload(msg.Payload, &p); err != nil {
 		c.sendError("invalid_payload", err.Error())
 		return
 	}
 
-	if err := c.coordinator.SendMessage(c.roomID, c.userID, p.Message); err != nil {
+	if p.RoomID == "" {
+		c.sendError("message_error", "room_id is required")
+		return
+	}
+
+	if _, ok := c.rooms[p.RoomID]; !ok {
+		c.sendError("message_error", "not in this room")
+		return
+	}
+
+	if err := c.coordinator.SendMessage(p.RoomID, c.userID, p.Message); err != nil {
 		c.sendError("message_error", err.Error())
 		return
 	}
@@ -319,8 +322,14 @@ func (c *Client) cleanup() {
 		c.cancel()
 	}
 
-	if c.roomID != "" && c.userID != "" {
-		_ = c.coordinator.LeaveRoom(c.roomID, c.userID)
+	// leave all joined rooms
+	if c.userID != "" {
+		for roomID := range c.rooms {
+			err := c.coordinator.LeaveRoom(roomID, c.userID)
+			if err != nil {
+				log.Printf("couldn't leave room : %s err: %v", roomID, err)
+			}
+		}
 	}
 }
 

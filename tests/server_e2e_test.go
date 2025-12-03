@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arturskrzydlo/chat-room/internal/app"
+	"github.com/arturskrzydlo/chat-room/internal/coordinator"
 	"github.com/arturskrzydlo/chat-room/internal/messages"
 	"github.com/arturskrzydlo/chat-room/internal/server"
 	"github.com/gorilla/websocket"
@@ -45,7 +45,7 @@ User 2 leaves the room and User 1 receives a system notification that User 2 lef
 User 1 then leaves the room, and the room is shut down cleanly by the coordinator.
 */
 func TestChatEndToEnd(t *testing.T) {
-	coord := app.NewCoordinator()
+	coord := coordinator.NewCoordinator()
 	wsSrv := server.NewWsServer(coord)
 	ts := httptest.NewServer(wsSrv)
 	defer ts.Close()
@@ -67,10 +67,11 @@ func TestChatEndToEnd(t *testing.T) {
 
 	userID1 := "user1"
 	userID2 := "user2"
+	roomID1 := "room_1"
 
 	// 1) user1 creates room_1 (and establishes identity).
 	createPayload := messages.CreateRoomPayload{
-		RoomID:   "room_1",
+		RoomID:   roomID1,
 		RoomName: "hello room",
 		UserID:   userID1,
 		UserName: "User One",
@@ -89,7 +90,7 @@ func TestChatEndToEnd(t *testing.T) {
 
 	// 2) user2 joins room_1.
 	joinPayload2 := messages.JoinRoomPayload{
-		RoomID:   "room_1",
+		RoomID:   roomID1,
 		UserID:   userID2,
 		UserName: "User Two",
 	}
@@ -112,7 +113,10 @@ func TestChatEndToEnd(t *testing.T) {
 	require.Equal(t, userID2, sysJoin.UserID, "expected system join user id")
 
 	// 3) user1 sends a chat message.
-	msgPayload1 := messages.MessagePayload{Message: "hello from user1"}
+	msgPayload1 := messages.MessagePayload{
+		RoomID:  roomID1,
+		Message: "hello from user1",
+	}
 	sendMsg1 := messages.WsMessage{
 		Type:    messages.MessageActionTypeMessage,
 		Payload: mustRaw(msgPayload1),
@@ -141,7 +145,11 @@ func TestChatEndToEnd(t *testing.T) {
 	require.Equal(t, "hello from user1", msgEv2.Message.Message, "user2 first chat content")
 
 	// 4) user2 replies.
-	msgPayload2 := messages.MessagePayload{Message: "hi from user2"}
+	msgPayload2 := messages.MessagePayload{
+		RoomID:  roomID1,
+		Message: "hi from user2",
+	}
+
 	sendMsg2 := messages.WsMessage{
 		Type:    messages.MessageActionTypeMessage,
 		Payload: mustRaw(msgPayload2),
@@ -162,7 +170,7 @@ func TestChatEndToEnd(t *testing.T) {
 	require.Equal(t, "hi from user2", msgEv1.Message.Message, "user1 sees reply content")
 
 	// 5) both users leave room_1.
-	leavePayload := messages.LeaveRoomPayload{RoomID: "room_1"}
+	leavePayload := messages.LeaveRoomPayload{RoomID: roomID1}
 	leaveMsg := messages.WsMessage{
 		Type:    messages.MessageActionTypeLeave,
 		Payload: mustRaw(leavePayload),
