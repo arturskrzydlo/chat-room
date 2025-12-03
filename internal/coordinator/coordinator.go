@@ -6,7 +6,6 @@ import (
 	"log"
 
 	"github.com/arturskrzydlo/chat-room/internal/messages"
-	"github.com/arturskrzydlo/chat-room/internal/models"
 )
 
 type Coordinator struct {
@@ -33,14 +32,14 @@ func (c *Coordinator) CreateRoom(
 		return fmt.Errorf("room with id %s already exists", roomID)
 	}
 
-	room := models.NewRoom(roomID, roomName, authorID)
+	room := NewRoom(roomID, roomName, authorID)
 	c.rooms.Store(roomID, room)
 
 	go room.Run()
 
 	// Auto-join author into the room
-	authorUser := &models.User{ID: authorID, Name: authorID}
-	roomClient := &models.RoomClient{
+	authorUser := &User{ID: authorID, Name: authorID}
+	roomClient := &RoomClient{
 		UserID: authorID,
 		User:   authorUser,
 		Send:   send,
@@ -56,7 +55,7 @@ func (c *Coordinator) CreateRoom(
 	return nil
 }
 
-func (c *Coordinator) GetRoom(roomID string) *models.Room {
+func (c *Coordinator) GetRoom(roomID string) *Room {
 	r, _ := c.rooms.Load(roomID)
 	return r
 }
@@ -81,8 +80,8 @@ func (c *Coordinator) JoinRoom(
 		return fmt.Errorf("user %s already in room", userID)
 	}
 
-	user := &models.User{ID: userID, Name: userName}
-	roomClient := &models.RoomClient{
+	user := &User{ID: userID, Name: userName}
+	roomClient := &RoomClient{
 		UserID: userID,
 		User:   user,
 		Send:   send,
@@ -163,7 +162,7 @@ func (c *Coordinator) deleteRoomIfEmpty(roomID string) {
 }
 
 func (c *Coordinator) Shutdown(ctx context.Context) error {
-	rooms := make([]*models.Room, 0)
+	rooms := make([]*Room, 0)
 	for _, room := range c.rooms.rooms {
 		rooms = append(rooms, room)
 	}

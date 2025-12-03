@@ -4,14 +4,13 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/arturskrzydlo/chat-room/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // helper to make a dummy room
-func newTestRoom(id string) *models.Room {
-	return models.NewRoom(id, "name_"+id, "author_"+id)
+func newTestRoom(id string) *Room {
+	return NewRoom(id, "name_"+id, "author_"+id)
 }
 
 func TestRoomStoreBasicOperations(t *testing.T) {
@@ -46,7 +45,7 @@ func TestRoomStoreRange(t *testing.T) {
 	s.Store("room2", r2)
 
 	seen := make(map[string]bool)
-	s.Range(func(r *models.Room) bool {
+	s.Range(func(r *Room) bool {
 		seen[r.ID] = true
 		return true
 	})
@@ -83,7 +82,7 @@ func TestRoomStoreConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < perGoroutine; i++ {
 				s.Load("some_room") // may or may not exist
-				s.Range(func(r *models.Room) bool {
+				s.Range(func(r *Room) bool {
 					_ = r.ID
 					return true
 				})
@@ -95,5 +94,5 @@ func TestRoomStoreConcurrentAccess(t *testing.T) {
 
 	// No assertion needed beyond "no data race / panic".
 	// But we can at least call Range and ensure it doesn't explode.
-	s.Range(func(r *models.Room) bool { return true })
+	s.Range(func(r *Room) bool { return true })
 }
