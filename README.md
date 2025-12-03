@@ -106,7 +106,7 @@ All messages are JSON: `{ "type": "action_type", "payload": {...} }`
 
 **Idle Connection Removal** - Close connections idle >5 minutes.
 
-**Authentication** - Current design trusts client-provided user IDs (no database). Production: require JWT token in WebSocket upgrade header; extract user ID from claims.
+**Authentication** - Current design trusts client-provided user IDs (no database). Add some authentication
 
 **Busy Rooms** - Broadcast to 1000+ users is sequential. Can spawn per-client goroutines or use async distribution to avoid blocking on slow clients.
 
