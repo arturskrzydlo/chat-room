@@ -80,6 +80,7 @@ func (r *Room) Run() {
 			case roomEventClose:
 				return
 			}
+		}
 	}
 }
 
