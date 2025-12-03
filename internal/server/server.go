@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/arturskrzydlo/chat-room/internal/coordinator"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,7 +17,7 @@ const (
 )
 
 type WsServer struct {
-	coordinator *coordinator.Coordinator
+	coordinator CoordinatorPort
 	upgrader    websocket.Upgrader
 
 	ctx        context.Context
@@ -27,7 +26,7 @@ type WsServer struct {
 	clientDone chan *Client
 }
 
-func NewWsServer(ctx context.Context, coordinator *coordinator.Coordinator) *WsServer {
+func NewWsServer(ctx context.Context, coordinator CoordinatorPort) *WsServer {
 	ctx, cancel := context.WithCancel(ctx)
 
 	s := &WsServer{

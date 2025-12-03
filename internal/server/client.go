@@ -7,7 +7,6 @@ import (
 	"log"
 	"time"
 
-	"github.com/arturskrzydlo/chat-room/internal/coordinator"
 	"github.com/arturskrzydlo/chat-room/internal/messages"
 	"github.com/gorilla/websocket"
 )
@@ -18,7 +17,7 @@ type Client struct {
 	userName    string
 	conn        *websocket.Conn
 	send        chan interface{}
-	coordinator *coordinator.Coordinator
+	coordinator CoordinatorPort
 	ctx         context.Context
 	cancel      context.CancelFunc
 }
