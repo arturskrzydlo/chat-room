@@ -118,9 +118,8 @@ func (r *Room) handleLeave(userID string) {
 	defer r.mu.Unlock()
 
 	delete(r.users, userID)
-	if send, exists := r.clients[userID]; exists {
+	if _, exists := r.clients[userID]; exists {
 		delete(r.clients, userID)
-		close(send)
 	}
 }
 

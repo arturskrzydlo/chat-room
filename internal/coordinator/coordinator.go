@@ -113,6 +113,8 @@ func (c *Coordinator) LeaveRoom(
 	leaveMessage := messages.NewUserLeftEvent(roomID, userID, user.Name)
 	room.EnqueueBroadcast(leaveMessage)
 
+	c.deleteRoomIfEmpty(roomID)
+
 	return nil
 }
 

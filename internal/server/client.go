@@ -172,14 +172,16 @@ func (c *Client) handleLeaveRoom(msg *messages.WsMessage) {
 		return
 	}
 
+	delete(c.rooms, p.RoomID)
+
 	if err := c.coordinator.LeaveRoom(p.RoomID, c.userID); err != nil {
+		c.rooms[p.RoomID] = struct{}{}
 		c.sendError("leave_room_error", err.Error())
 		return
 	}
 
 	log.Printf("User %s left room: %s", c.userID, p.RoomID)
 
-	delete(c.rooms, p.RoomID)
 }
 
 func (c *Client) handleChatMessage(msg *messages.WsMessage) {
