@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +23,7 @@ type WsServer struct {
 
 	ctx        context.Context
 	cancel     context.CancelFunc
+	clientsMu  sync.RWMutex
 	clients    map[*Client]struct{}
 	clientDone chan *Client
 }
@@ -64,16 +66,29 @@ func (s *WsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cancel:      cancel,
 	}
 
+	s.clientsMu.Lock()
+	s.clients[client] = struct{}{}
+	s.clientsMu.Unlock()
+
 	go client.writePump()
-	client.readPump()
-	s.clientDone <- client
+
+	func() {
+		defer func() {
+			client.cleanup()
+			close(client.send)
+			s.clientDone <- client
+		}()
+		client.readPump()
+	}()
 }
 
 func (s *WsServer) watchClients() {
 	for {
 		select {
 		case c := <-s.clientDone:
+			s.clientsMu.Lock()
 			delete(s.clients, c)
+			s.clientsMu.Unlock()
 		case <-s.ctx.Done():
 			return
 		}
@@ -85,10 +100,12 @@ func (s *WsServer) Shutdown(ctx context.Context) error {
 		s.cancel()
 	}
 
+	s.clientsMu.Lock()
 	clients := make([]*Client, 0, len(s.clients))
 	for c := range s.clients {
 		clients = append(clients, c)
 	}
+	s.clientsMu.Unlock()
 
 	for _, c := range clients {
 		if c.cancel != nil {
