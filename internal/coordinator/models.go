@@ -64,9 +64,6 @@ func NewRoom(id, name, authorID string) *Room {
 func (r *Room) Run() {
 	defer r.cleanup()
 
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case ev, ok := <-r.events:
@@ -83,9 +80,6 @@ func (r *Room) Run() {
 			case roomEventClose:
 				return
 			}
-		case <-ticker.C:
-			// Periodic cleanup or health checks can go here
-		}
 	}
 }
 
