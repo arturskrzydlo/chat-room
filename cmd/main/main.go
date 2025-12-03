@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -13,30 +14,36 @@ import (
 	"github.com/arturskrzydlo/chat-room/internal/server"
 )
 
+const (
+	serverAddr            = ":8080"
+	serverReadTimeout     = 15 * time.Second
+	serverWriteTimeout    = 15 * time.Second
+	serverShutdownTimeout = 30 * time.Second
+	serverMaxHeaderBytes  = 1 * 1024 * 1024 // 1MB
+)
+
 func main() {
-	// Create coordinator
-	coordinator := coordinator.NewCoordinator()
+	coord := coordinator.NewCoordinator()
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
 
-	// Create WebSocket server
-	wsServer := server.NewWsServer(coordinator)
+	wsServer := server.NewWsServer(rootCtx, coord)
 
-	// Setup HTTP routes
 	http.Handle("/ws", wsServer)
 
 	// Optional: Add health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"healthy"}`))
+		_, _ = w.Write([]byte(`{"status":"healthy"}`))
 	})
 
-	// Server configuration
 	srv := &http.Server{
-		Addr:           ":8080",
+		Addr:           serverAddr,
 		Handler:        http.DefaultServeMux,
-		ReadTimeout:    15 * time.Second,
-		WriteTimeout:   15 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1MB
+		ReadTimeout:    serverReadTimeout,
+		WriteTimeout:   serverWriteTimeout,
+		MaxHeaderBytes: serverMaxHeaderBytes,
 	}
 
 	// Graceful shutdown handling
@@ -47,11 +54,16 @@ func main() {
 
 		log.Println("Shutting down server...")
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), serverShutdownTimeout)
 		defer cancel()
 
+		// Stop accepting new WS and close all clients
+		if err := wsServer.Shutdown(ctx); err != nil {
+			log.Printf("WebSocket server shutdown error: %v", err)
+		}
+
 		// Shutdown all rooms
-		if err := coordinator.Shutdown(ctx); err != nil {
+		if err := coord.Shutdown(ctx); err != nil {
 			log.Printf("Coordinator shutdown error: %v", err)
 		}
 
@@ -61,10 +73,10 @@ func main() {
 		}
 	}()
 
-	log.Println("Chat room server started at http://localhost:8080")
-	log.Println("WebSocket endpoint: ws://localhost:8080/ws")
+	log.Printf("Chat room server started at http://localhost%s\n", serverAddr)
+	log.Printf("WebSocket endpoint: ws://localhost%s/ws\n", serverAddr)
 
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Server error: %v", err)
 	}
 }

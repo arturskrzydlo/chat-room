@@ -46,7 +46,11 @@ User 1 then leaves the room, and the room is shut down cleanly by the coordinato
 */
 func TestChatEndToEnd(t *testing.T) {
 	coord := coordinator.NewCoordinator()
-	wsSrv := server.NewWsServer(coord)
+
+	rootCtx, rootCancel := context.WithCancel(context.Background())
+	defer rootCancel()
+
+	wsSrv := server.NewWsServer(rootCtx, coord)
 	ts := httptest.NewServer(wsSrv)
 	defer ts.Close()
 

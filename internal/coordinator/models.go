@@ -103,7 +103,6 @@ func (r *Room) EnqueueBroadcast(msg interface{}) {
 
 func (r *Room) EnqueueClose() {
 	r.events <- roomEvent{kind: roomEventClose}
-	close(r.events)
 }
 
 func (r *Room) handleJoin(client *RoomClient) {
