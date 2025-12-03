@@ -75,7 +75,6 @@ func (s *WsServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	func() {
 		defer func() {
 			client.cleanup()
-			close(client.send)
 			s.clientDone <- client
 		}()
 		client.readPump()
@@ -96,9 +95,11 @@ func (s *WsServer) watchClients() {
 }
 
 func (s *WsServer) Shutdown(ctx context.Context) error {
-	if s.cancel != nil {
-		s.cancel()
-	}
+	defer func() {
+		if s.cancel != nil {
+			s.cancel()
+		}
+	}()
 
 	s.clientsMu.Lock()
 	clients := make([]*Client, 0, len(s.clients))
@@ -116,11 +117,15 @@ func (s *WsServer) Shutdown(ctx context.Context) error {
 
 	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
-
 	for {
-		if len(s.clients) == 0 {
+		s.clientsMu.RLock()
+		count := len(s.clients)
+		s.clientsMu.RUnlock()
+
+		if count == 0 {
 			return nil
 		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

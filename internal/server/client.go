@@ -23,8 +23,6 @@ type Client struct {
 }
 
 func (c *Client) readPump() {
-	defer c.cleanup()
-
 	c.setupReadTimeouts()
 
 	for {
@@ -216,12 +214,7 @@ func (c *Client) sendError(code, message string) {
 
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
-	defer func() {
-		ticker.Stop()
-		if err := c.conn.Close(); err != nil {
-			log.Printf("writePump: error closing connection: %v", err)
-		}
-	}()
+	defer ticker.Stop()
 
 	for {
 		select {
